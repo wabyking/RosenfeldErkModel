@@ -10,12 +10,12 @@ class Model(nn.Module):
         # time encoder
         self.dense1 = nn.Linear(emb_dimension,emb_dimension)
         self.dense2 = nn.Linear(emb_dimension, emb_dimension)
-        self.dense4 = nn.Linear(emb_dimension, emb_dimension)
+        self.dense4 = nn.Linear(emb_dimension, emb_dimension*3)
         # word encoder
         self.u_embeddings = nn.Embedding(emb_size, emb_dimension*3)
         self.v_embeddings = nn.Embedding(emb_size, emb_dimension*3)
         self.T = nn.Parameter(torch.randn(emb_dimension,emb_dimension,emb_dimension*3))
-        self.B = nn.Parameter(torch.randn(emb_dimension,emb_dimension*3))
+        self.B = nn.Parameter(torch.randn(emb_dimension,emb_dimension))
 
         initrange = 1.0 / self.emb_dimension
         init.uniform_(self.u_embeddings.weight.data, -initrange, initrange)
@@ -23,8 +23,9 @@ class Model(nn.Module):
 
     def word_embedding(self, pos_u,timevec =None):
         emb_u = self.u_embeddings(pos_u)
-        trans_w = torch.einsum('ijk,bk->bij', self.T, emb_u)
-        h3 = torch.einsum('bij,bi->bj', trans_w, timevec)
+        trans_w = torch.einsum('ijk,bk->bij', self.T, emb_u) + self.B
+        h3 = torch.einsum('bij,bi->bj', trans_w, timevec) 
+
         use_w = self.dense4(h3)
         return use_w
 
@@ -39,21 +40,25 @@ class Model(nn.Module):
 
         #encoding target for postive
         emb_v = self.v_embeddings(pos_v)
-        trans_w_v = torch.einsum('ijk,bk->bij', self.T, emb_v)
-        h3_v = torch.einsum('bij,bi->bj', trans_w_v, timevec)
+        trans_w_v = torch.einsum('ijk,bk->bij', self.T, emb_v) + self.B
+        h3_v = torch.einsum('bij,bi->bj', trans_w_v, timevec) 
         use_c_v = self.dense4(h3_v)
 
         # encoding targets for negative
         emb_v_neg = self.v_embeddings(neg_v)
-        trans_w_v_neg = torch.einsum('ijk,blk->blij', self.T, emb_v_neg) # l is the numbers of nagetive samples
-        h3_v_neg = torch.einsum('blij,bli->blj', trans_w_v_neg, timevec.unsqueeze(-2).repeat(1,neg_v.size(1) ,1))
+        trans_w_v_neg = torch.einsum('ijk,blk->blij', self.T, emb_v_neg)  + self.B# l is the numbers of nagetive samples
+        h3_v_neg = torch.einsum('blij,bli->blj', trans_w_v_neg, timevec.unsqueeze(-2).repeat(1,neg_v.size(1) ,1)) 
         use_c_v_neg = self.dense4(h3_v_neg)
 
         score = torch.sum(torch.mul(use_w, use_c_v), dim=1)
+        print(score)
         score = torch.clamp(score, max=10, min=-10)
         score = -F.logsigmoid(score)
 
+
+
         neg_score = torch.bmm(use_c_v_neg, use_w.unsqueeze(2)).squeeze()
+
         neg_score = torch.clamp(neg_score, max=10, min=-10)
         neg_score = -torch.mean(F.logsigmoid(-neg_score), dim=1)
 
@@ -71,7 +76,7 @@ def main():
     model = Model(101,50)        #  vocabuliary size 101 and dimension 50
     for context,target,negative_samples,time in fake_dataset():
         loss,pos,neg = model(context,target,negative_samples,time)
-        print(loss)
+        print(neg)
 
 if __name__ == '__main__':
     main()
