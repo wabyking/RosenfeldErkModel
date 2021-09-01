@@ -14,8 +14,8 @@ class Model(nn.Module):
         # word encoder
         self.u_embeddings = nn.Embedding(emb_size, emb_dimension*3)
         self.v_embeddings = nn.Embedding(emb_size, emb_dimension*3)
-        self.T = nn.Parameter(torch.randn(emb_dimension,emb_dimension,emb_dimension*3))
-        self.B = nn.Parameter(torch.randn(emb_dimension,emb_dimension))
+        self.T = nn.Parameter(torch.randn(emb_dimension,emb_dimension,emb_dimension*3)/emb_dimension)
+        self.B = nn.Parameter(torch.randn(emb_dimension,emb_dimension)/emb_dimension)
 
         initrange = 1.0 / self.emb_dimension
         init.uniform_(self.u_embeddings.weight.data, -initrange, initrange)
